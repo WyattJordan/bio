@@ -21,10 +21,9 @@ Motivation for the creation of tailwind [blog post](https://adamwathan.me/css-ut
 ## High Level Goals
 ✅ Configure website using a default configuration provided by Vercel.  
 ✅ Make basic modification and test deployment
+✅ Get basic preact custom build working and deploying to host (just used boiler plate)
+✅ Make <14KB and keep it that way (basic preact app was only 3KB)
 
-
-0. Get basic preact custom build working and deploying to host (just used boiler plate)
-1. Make <14KB and keep it that way
 2. Settle on a basic design and color formatting
 3. Write a basic bio and links to various pages (github, linkedin, etc)
 4. Play around with delayed loading of images (placeholder boxes for image locations so under 14KB then fetch)
@@ -32,4 +31,5 @@ Motivation for the creation of tailwind [blog post](https://adamwathan.me/css-ut
 
 
 ## Long-term things to try
-[WebGPU](https://webgpu.github.io/webgpu-samples/?sample=helloTriangle#main.ts) (and instructions for user to enable it on different platforms)
+[WebGPU](https://webgpu.github.io/webgpu-samples/?sample=helloTriangle#main.ts) (and instructions for user to enable it on different platforms), see [WebGPU fundamentals](https://webgpufundamentals.org/)
+
