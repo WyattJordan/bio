@@ -152,6 +152,7 @@ button:disabled { background: #555; cursor: not-allowed; }
 <div id="upload-section" class="upload-section">
     <label for="csv-input">Upload Bids CSV</label>
     <input type="file" id="csv-input" accept=".csv" onchange="handleUpload(event)">
+    <button onclick="loadExample()" style="margin-left: 12px;">Try Example Bids</button>
     <p>CSV format: first column is team name, remaining columns are manager bids</p>
     <div class="format-hint">Team,Manager1,Manager2,Manager3,Manager4</div>
 </div>
@@ -184,6 +185,55 @@ button:disabled { background: #555; cursor: not-allowed; }
 
 <script>
 const COLORS = ['#e94560', '#0ea5e9', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+const EXAMPLE_CSV = `Team,Isabel,Jonah,Michelle,Mary
+Argentina,6.42,8.92,10.54,4.97
+Spain,40.47,2.25,7.76,0.55
+France,17.33,37.68,0.35,13.41
+England,11.75,15.75,1.52,9.74
+Portugal,2.13,28.95,0.42,0.72
+Brazil,2.09,22.71,12.88,4.35
+Morocco,0.72,8.97,4.69,31.10
+Netherlands,23.59,24.52,8.62,3.48
+Belgium,10.52,0.87,28.20,1.94
+Germany,13.74,2.00,3.31,8.13
+Croatia,0.23,0.41,5.94,49.99
+Colombia,37.08,3.42,15.43,3.18
+Mexico,18.40,4.16,2.77,12.44
+Senegal,2.39,2.60,0.83,15.56
+Uruguay,1.95,14.07,3.44,2.86
+USA,1.91,3.42,1.72,13.33
+Japan,3.32,2.48,25.15,4.55
+Switzerland,6.60,5.69,15.15,9.61
+Iran,4.85,1.07,8.91,9.33
+Türkiye,2.86,11.02,17.61,6.90
+Ecuador,7.58,0.51,13.49,0.82
+Austria,1.16,27.45,1.65,15.09
+S Korea,2.57,9.02,17.17,3.12
+Australia,3.26,1.30,5.74,1.60
+Algeria,4.18,0.03,11.70,0.31
+Egypt,10.12,9.12,15.42,6.37
+Canada,1.40,6.33,2.49,7.72
+Norway,4.34,6.43,0.72,0.11
+Côte d'Ivoire,5.13,6.92,1.53,4.45
+Panama,0.26,0.34,3.13,1.51
+Sweden,4.82,1.87,9.08,5.78
+Czechia,0.91,0.49,9.92,1.01
+Paraguay,0.31,7.46,0.03,5.82
+Scotland,12.76,3.43,3.17,2.27
+Tunisia,13.50,1.32,2.24,11.98
+Congo DR,6.14,0.20,0.97,0.60
+Uzbekistan,1.25,1.05,0.45,1.55
+Qatar,0.32,1.01,1.34,0.41
+Iraq,3.30,3.07,8.48,8.02
+South Africa,1.49,2.14,1.04,5.85
+Saudi Arabia,0.30,4.09,1.73,0.74
+Jordan,1.37,1.05,2.52,2.34
+Bosnia and Herzegovina,0.06,0.18,0.80,3.16
+Cabo Verde,3.43,1.46,5.28,1.26
+Ghana,0.34,1.34,3.89,0.94
+Curaçao,0.93,0.58,0.26,0.26
+Haiti,0.21,0.69,0.41,0.06
+New Zealand,0.21,0.16,0.11,0.71`;
 let DATA = null;
 let currentRound = 0;
 let autoInterval = null;
@@ -274,14 +324,22 @@ function handleUpload(event) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
-        const { managers, teams, bids } = parseCSV(e.target.result);
-        DATA = runAuction(managers, teams, bids);
-        currentRound = 0;
-        document.getElementById('upload-section').style.display = 'none';
-        document.getElementById('auction-ui').style.display = 'block';
-        updateDisplay();
+        startAuction(e.target.result);
     };
     reader.readAsText(file);
+}
+
+function loadExample() {
+    startAuction(EXAMPLE_CSV);
+}
+
+function startAuction(csvText) {
+    const { managers, teams, bids } = parseCSV(csvText);
+    DATA = runAuction(managers, teams, bids);
+    currentRound = 0;
+    document.getElementById('upload-section').style.display = 'none';
+    document.getElementById('auction-ui').style.display = 'block';
+    updateDisplay();
 }
 
 function resetAuction() {
