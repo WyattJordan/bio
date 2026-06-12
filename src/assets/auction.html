@@ -164,6 +164,7 @@ button:disabled { background: #555; cursor: not-allowed; }
                 <button id="prev-btn" onclick="prevRound()">&#9664; Prev</button>
                 <button id="next-btn" onclick="nextRound()">Next &#9654;</button>
                 <button id="auto-btn" onclick="toggleAuto()">&#9654; Auto</button>
+                <button onclick="downloadResults()">&#11015; Download Results</button>
                 <button onclick="resetAuction()">&#8635; New CSV</button>
             </div>
             <div class="round-info" id="round-info">
@@ -235,6 +236,7 @@ Curaçao,0.93,0.58,0.26,0.26
 Haiti,0.21,0.69,0.41,0.06
 New Zealand,0.21,0.16,0.11,0.71`;
 let DATA = null;
+let ORIGINAL_INPUT = null;
 let currentRound = 0;
 let autoInterval = null;
 
@@ -335,11 +337,37 @@ function loadExample() {
 
 function startAuction(csvText) {
     const { managers, teams, bids } = parseCSV(csvText);
+    ORIGINAL_INPUT = { managers, teams, bids };
     DATA = runAuction(managers, teams, bids);
     currentRound = 0;
     document.getElementById('upload-section').style.display = 'none';
     document.getElementById('auction-ui').style.display = 'block';
     updateDisplay();
+}
+
+function downloadResults() {
+    const finalRound = DATA.rounds[DATA.rounds.length - 1];
+    const results = finalRound.results_so_far;
+    const winnerMap = {};
+    results.forEach(r => winnerMap[r.team] = r.manager);
+
+    const header = ['Team', ...ORIGINAL_INPUT.managers, 'Team Manager'];
+    const rows = ORIGINAL_INPUT.teams.map((team, i) => {
+        const bidCols = ORIGINAL_INPUT.bids[i].map(b => b.toFixed(2));
+        return [team, ...bidCols, winnerMap[team]];
+    });
+
+    const csv = [header, ...rows].map(row =>
+        row.map(cell => cell.includes(',') ? `"${cell}"` : cell).join(',')
+    ).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'auction_results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 function resetAuction() {
