@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>2026 World Cup</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #1a1a2e;
+    color: #eee;
+}
+h1 {
+    text-align: center;
+    color: #e94560;
+    margin-bottom: 5px;
+}
+.upload-section {
+    text-align: center;
+    margin: 20px 0;
+    padding: 30px;
+    border: 2px dashed #e94560;
+    border-radius: 12px;
+    background: #16213e;
+}
+.upload-section p {
+    margin: 8px 0;
+    color: #aaa;
+    font-size: 14px;
+}
+.upload-section input[type="file"] {
+    display: none;
+}
+.upload-section label {
+    display: inline-block;
+    background: #e94560;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.2s;
+}
+.upload-section label:hover { background: #c23152; }
+.format-hint {
+    font-family: monospace;
+    background: #0f3460;
+    padding: 8px 12px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 13px;
+}
+.top-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin: 15px 0;
+}
+.controls-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 220px;
+}
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+button {
+    background: #e94560;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+button:hover { background: #c23152; }
+button:disabled { background: #555; cursor: not-allowed; }
+.round-info {
+    font-size: 16px;
+    min-height: 50px;
+}
+.winner-badge {
+    display: inline-block;
+    background: #0f3460;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 2px solid #e94560;
+    margin-top: 5px;
+}
+.manager-lists {
+    display: flex;
+    flex: 1;
+    gap: 12px;
+    overflow-x: auto;
+}
+.manager-list {
+    flex: 1;
+    min-width: 140px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #16213e;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.manager-list h3 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid currentColor;
+}
+.manager-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+}
+.manager-list li {
+    padding: 2px 0;
+    opacity: 0.9;
+}
+.manager-list li .bid-amount {
+    float: right;
+    opacity: 0.7;
+    font-size: 12px;
+}
+.charts {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.chart-container {
+    background: #16213e;
+    border-radius: 10px;
+    padding: 10px;
+}
+#budget-chart { height: 300px; }
+#bids-chart { height: 400px; }
+#auction-ui { display: none; }
+</style>
+</head>
+<body>
+<h1>2026 World Cup</h1>
+
+<div id="upload-section" class="upload-section">
+    <label for="csv-input">Upload Bids CSV</label>
+    <input type="file" id="csv-input" accept=".csv" onchange="handleUpload(event)">
+    <p>CSV format: first column is team name, remaining columns are manager bids</p>
+    <div class="format-hint">Team,Manager1,Manager2,Manager3,Manager4</div>
+</div>
+
+<div id="auction-ui">
+    <div class="top-section">
+        <div class="controls-panel">
+            <div class="controls">
+                <button id="prev-btn" onclick="prevRound()">&#9664; Prev</button>
+                <button id="next-btn" onclick="nextRound()">Next &#9654;</button>
+                <button id="auto-btn" onclick="toggleAuto()">&#9654; Auto</button>
+                <button onclick="resetAuction()">&#8635; New CSV</button>
+            </div>
+            <div class="round-info" id="round-info">
+                <div>Click "Next" to start</div>
+            </div>
+        </div>
+        <div class="manager-lists" id="manager-lists"></div>
+    </div>
+
+    <div class="charts">
+        <div class="chart-container">
+            <div id="bids-chart"></div>
+        </div>
+        <div class="chart-container">
+            <div id="budget-chart"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const COLORS = ['#e94560', '#0ea5e9', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+let DATA = null;
+let currentRound = 0;
+let autoInterval = null;
+
+function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const header = lines[0].split(',').map(s => s.trim());
+    const managers = header.slice(1);
+    const teams = [];
+    const bids = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(s => s.trim());
+        if (!cols[0]) continue;
+        teams.push(cols[0]);
+        bids.push(cols.slice(1).map(Number));
+    }
+
+    return { managers, teams, bids };
+}
+
+function runAuction(managers, teams, bids) {
+    const numTeams = teams.length;
+    const numManagers = managers.length;
+
+    const adj = bids.map(row => [...row]);
+    const rounds = [];
+    const results = [];
+    const startingBudget = managers.map((_, j) =>
+        bids.reduce((sum, row) => sum + row[j], 0)
+    );
+    const remainingBudget = [...startingBudget];
+
+    rounds.push({
+        round: 0,
+        team: null,
+        winner: null,
+        winning_bid: null,
+        bids_snapshot: adj.map(row => [...row]),
+        remaining_budget: [...remainingBudget],
+        results_so_far: [],
+    });
+
+    for (let i = 0; i < numTeams; i++) {
+        let maxBid = -1, winner = 0;
+        for (let j = 0; j < numManagers; j++) {
+            if (adj[i][j] > maxBid) {
+                maxBid = adj[i][j];
+                winner = j;
+            }
+        }
+
+        remainingBudget[winner] -= maxBid;
+        results.push({ team: teams[i], manager: managers[winner], bid: maxBid });
+
+        for (let j = 0; j < numManagers; j++) {
+            if (j === winner) continue;
+            const lostBid = adj[i][j];
+            if (lostBid <= 0) continue;
+            let remainingSum = 0;
+            for (let k = i + 1; k < numTeams; k++) remainingSum += adj[k][j];
+            if (remainingSum <= 0) continue;
+            for (let k = i + 1; k < numTeams; k++) {
+                adj[k][j] += lostBid * (adj[k][j] / remainingSum);
+            }
+        }
+
+        for (let j = 0; j < numManagers; j++) {
+            adj[i][j] = 0.0;
+        }
+
+        rounds.push({
+            round: i + 1,
+            team: teams[i],
+            winner: managers[winner],
+            winning_bid: Math.round(maxBid * 100) / 100,
+            bids_snapshot: adj.map(row => [...row]),
+            remaining_budget: [...remainingBudget],
+            results_so_far: [...results],
+        });
+    }
+
+    return { managers, teams, rounds, starting_budget: startingBudget };
+}
+
+function handleUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const { managers, teams, bids } = parseCSV(e.target.result);
+        DATA = runAuction(managers, teams, bids);
+        currentRound = 0;
+        document.getElementById('upload-section').style.display = 'none';
+        document.getElementById('auction-ui').style.display = 'block';
+        updateDisplay();
+    };
+    reader.readAsText(file);
+}
+
+function resetAuction() {
+    if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+    }
+    DATA = null;
+    currentRound = 0;
+    document.getElementById('upload-section').style.display = 'block';
+    document.getElementById('auction-ui').style.display = 'none';
+    document.getElementById('csv-input').value = '';
+}
+
+function updateDisplay() {
+    const round = DATA.rounds[currentRound];
+    const info = document.getElementById('round-info');
+
+    if (currentRound === 0) {
+        info.innerHTML = '<div>Click "Next" to start</div>';
+    } else {
+        info.innerHTML = `
+            <div>Round ${currentRound} / ${DATA.teams.length}</div>
+            <div class="winner-badge">
+                <strong>${round.team}</strong> &rarr; ${round.winner} ($${round.winning_bid.toFixed(2)})
+            </div>
+        `;
+    }
+
+    document.getElementById('prev-btn').disabled = (currentRound === 0);
+    document.getElementById('next-btn').disabled = (currentRound === DATA.rounds.length - 1);
+
+    updateBudgetChart();
+    updateBidsChart();
+    updateManagerLists();
+}
+
+function updateBudgetChart() {
+    const traces = DATA.managers.map((mgr, j) => {
+        const x = [];
+        const y = [];
+        for (let r = 0; r <= currentRound; r++) {
+            x.push(r);
+            y.push(DATA.rounds[r].remaining_budget[j]);
+        }
+        return {
+            x, y,
+            name: mgr,
+            type: 'scatter',
+            mode: 'lines+markers',
+            line: { color: COLORS[j % COLORS.length], width: 3 },
+            marker: { size: 4 },
+        };
+    });
+
+    const layout = {
+        title: { text: 'Remaining Budget', font: { color: '#eee' } },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#aaa' },
+        xaxis: { title: 'Round', range: [0, DATA.teams.length], gridcolor: '#333' },
+        yaxis: { title: '$', range: [0, Math.max(...DATA.starting_budget) * 1.03], gridcolor: '#333' },
+        margin: { t: 40, b: 40, l: 50, r: 20 },
+        legend: { orientation: 'h', y: -0.15 },
+    };
+
+    Plotly.react('budget-chart', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+function updateBidsChart() {
+    const round = DATA.rounds[currentRound];
+    const snapshot = round.bids_snapshot;
+
+    const traces = DATA.managers.map((mgr, j) => ({
+        x: DATA.teams,
+        y: snapshot.map(row => row[j]),
+        name: mgr,
+        type: 'bar',
+        marker: { color: COLORS[j % COLORS.length] },
+    }));
+
+    const layout = {
+        title: { text: 'Current Bids by Team', font: { color: '#eee' } },
+        barmode: 'group',
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#aaa', size: 10 },
+        xaxis: { tickangle: -45, gridcolor: '#333' },
+        yaxis: { title: '$', gridcolor: '#333' },
+        margin: { t: 40, b: 100, l: 50, r: 20 },
+        legend: { orientation: 'h', y: -0.3 },
+    };
+
+    Plotly.react('bids-chart', traces, layout, { responsive: true, displayModeBar: false });
+}
+
+function updateManagerLists() {
+    const round = DATA.rounds[currentRound];
+    const results = round.results_so_far;
+    const container = document.getElementById('manager-lists');
+
+    const byManager = {};
+    DATA.managers.forEach(m => byManager[m] = []);
+    results.forEach(r => byManager[r.manager].push(r));
+
+    container.innerHTML = DATA.managers.map((mgr, j) => {
+        const teams = byManager[mgr];
+        const spent = teams.reduce((s, r) => s + r.bid, 0);
+        const items = teams.map(r =>
+            `<li>${r.team}<span class="bid-amount">$${r.bid.toFixed(2)}</span></li>`
+        ).join('');
+        return `
+            <div class="manager-list">
+                <h3 style="color: ${COLORS[j % COLORS.length]}">${mgr} (${teams.length}) - $${(DATA.starting_budget[j] - spent).toFixed(0)} left</h3>
+                <ul>${items}</ul>
+            </div>
+        `;
+    }).join('');
+}
+
+function nextRound() {
+    if (currentRound < DATA.rounds.length - 1) {
+        currentRound++;
+        updateDisplay();
+    }
+}
+
+function prevRound() {
+    if (currentRound > 0) {
+        currentRound--;
+        updateDisplay();
+    }
+}
+
+function toggleAuto() {
+    const btn = document.getElementById('auto-btn');
+    if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+        btn.textContent = '▶ Auto';
+    } else {
+        btn.textContent = '■ Stop';
+        autoInterval = setInterval(() => {
+            if (currentRound >= DATA.rounds.length - 1) {
+                clearInterval(autoInterval);
+                autoInterval = null;
+                btn.textContent = '▶ Auto';
+                return;
+            }
+            nextRound();
+        }, 1000);
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (!DATA) return;
+    if (e.key === 'ArrowRight') nextRound();
+    if (e.key === 'ArrowLeft') prevRound();
+    if (e.key === ' ') { e.preventDefault(); toggleAuto(); }
+});
+</script>
+</body>
+</html>
